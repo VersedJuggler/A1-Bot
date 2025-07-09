@@ -29,6 +29,7 @@ buy_time_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="В ближайшие 2 месяца")],
         [KeyboardButton(text="В течение полугода")],
         [KeyboardButton(text="Только присматриваю")],
+        [KeyboardButton(text="← Назад")],
     ],
     resize_keyboard=True
 )
@@ -37,8 +38,10 @@ city_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Казань")],
         [KeyboardButton(text="Москва")],
-        [KeyboardButton(text="Петербург")],
+        [KeyboardButton(text="Санкт-Петербург")],
         [KeyboardButton(text="Сочи")],
+        [KeyboardButton(text="Крым")],
+        [KeyboardButton(text="← Назад")],
     ],
     resize_keyboard=True
 )
@@ -49,9 +52,10 @@ flat_type_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="1-комнатная")],
         [KeyboardButton(text="2-комнатная")],
         [KeyboardButton(text="3-комнатная")],
-        [KeyboardButton(text="4-комнтаная")],
+        [KeyboardButton(text="4-комнатная")],
         [KeyboardButton(text="5-комнатная")],
         [KeyboardButton(text="Не определился")],
+        [KeyboardButton(text="← Назад")],
     ],
     resize_keyboard=True
 )
@@ -61,6 +65,7 @@ first_payment_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="500 тыс - 1 млн")],
         [KeyboardButton(text="1 млн - 3 млн")],
         [KeyboardButton(text="Свыше 3 млн")],
+        [KeyboardButton(text="← Назад")],
     ],
     resize_keyboard=True
 )
@@ -77,6 +82,14 @@ main_menu_keyboard = ReplyKeyboardMarkup(
 phone_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Отправить номер телефона", request_contact=True)],
+    ],
+    resize_keyboard=True
+)
+
+# Клавиатура для возврата назад
+back_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="← Назад")],
     ],
     resize_keyboard=True
 )
@@ -106,7 +119,7 @@ async def handle_main_choice(message: types.Message):
         user_states[user.id] = {"step": 201, "data": {"purpose": message.text}}
         await message.answer(
             "Пожалуйста, опишите Ваш запрос, чтобы менеджер мог дать полезный и применимый для Вас ответ и найти решение",
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=back_keyboard
         )
 
 async def handle_buy_time(message: types.Message):
@@ -117,6 +130,15 @@ async def handle_buy_time(message: types.Message):
     user_states[user.id]["step"] = 2
     await message.answer("В каком городе вы ищете недвижимость?", reply_markup=city_keyboard)
 
+# Для сценария "Купить для инвестиции"
+async def handle_buy_time_invest(message: types.Message):
+    user = message.from_user
+    if user.id not in user_states or user_states[user.id].get("step") != 101:
+        return
+    user_states[user.id]["data"]["buy_time"] = message.text
+    user_states[user.id]["step"] = 102
+    await message.answer("В каком городе вы ищете недвижимость?", reply_markup=city_keyboard)
+
 async def handle_city(message: types.Message):
     user = message.from_user
     if user.id not in user_states or user_states[user.id].get("step") != 2:
@@ -125,12 +147,30 @@ async def handle_city(message: types.Message):
     user_states[user.id]["step"] = 3
     await message.answer("Какую квартиру Вы планируете покупать?", reply_markup=flat_type_keyboard)
 
+# Для сценария "Купить для инвестиции"
+async def handle_city_invest(message: types.Message):
+    user = message.from_user
+    if user.id not in user_states or user_states[user.id].get("step") != 102:
+        return
+    user_states[user.id]["data"]["city"] = message.text
+    user_states[user.id]["step"] = 103
+    await message.answer("Какую квартиру Вы планируете покупать?", reply_markup=flat_type_keyboard)
+
 async def handle_flat_type(message: types.Message):
     user = message.from_user
     if user.id not in user_states or user_states[user.id].get("step") != 3:
         return
     user_states[user.id]["data"]["flat_type"] = message.text
     user_states[user.id]["step"] = 4
+    await message.answer("Какой первый взнос планируете вносить?", reply_markup=first_payment_keyboard)
+
+# Для сценария "Купить для инвестиции"
+async def handle_flat_type_invest(message: types.Message):
+    user = message.from_user
+    if user.id not in user_states or user_states[user.id].get("step") != 103:
+        return
+    user_states[user.id]["data"]["flat_type"] = message.text
+    user_states[user.id]["step"] = 104
     await message.answer("Какой первый взнос планируете вносить?", reply_markup=first_payment_keyboard)
 
 async def handle_first_payment(message: types.Message):
@@ -147,18 +187,18 @@ async def handle_first_payment(message: types.Message):
     thank_text = (
         f"*{user.first_name}*, спасибо!\n\n"
         "Передаю информацию менеджеру, чтобы Вы могли обсудить подробности!\n\n"
-        "Наш график работы:\n\nЕжедневно с 09 до 21ч по московскому времени"
+        "Наш график работы: Ежедневно с 9:00 до 19:00"
     )
     await message.answer(thank_text, reply_markup=main_menu_keyboard, parse_mode="Markdown")
     # Отправка данных менеджерам
-    manager_ids = [6413686861, 762315344]
+    manager_ids = [6413686861, 762315344, 125301274]
     data = user_states[user.id]["data"]
     username = user.username or "-"
     info = (
         f"Пользователь: {user.first_name} (@{username}) ({user.id})\n"
         f"Цель: Купить квартиру для себя\n"
         f"Когда планирует покупку: {data.get('buy_time')}\n"
-        f"Город: {data.get('city')}\n"
+        f"Город: {data.get('city').replace('Петербург', 'Санкт-Петербург')}\n"
         f"Тип квартиры: {data.get('flat_type')}\n"
         f"Первый взнос: {data.get('first_payment')}"
         + (f"\nТелефон: {data.get('phone')}" if data.get('phone') else "")
@@ -179,18 +219,18 @@ async def handle_first_payment_invest(message: types.Message):
     thank_text = (
         f"*{user.first_name}*, спасибо!\n\n"
         "Передаю информацию менеджеру, чтобы Вы могли обсудить подробности!\n\n"
-        "Наш график работы:\n\nЕжедневно с 09 до 21ч по московскому времени"
+        "Наш график работы: Ежедневно с 9:00 до 19:00"
     )
     await message.answer(thank_text, reply_markup=main_menu_keyboard, parse_mode="Markdown")
     # Отправка данных менеджерам
-    manager_ids = [6413686861, 762315344]
+    manager_ids = [6413686861, 762315344, 125301274]
     data = user_states[user.id]["data"]
     username = user.username or "-"
     info = (
         f"Пользователь: {user.first_name} (@{username}) ({user.id})\n"
         f"Цель: Купить для инвестиции\n"
         f"Когда планирует покупку: {data.get('buy_time')}\n"
-        f"Город: {data.get('city')}\n"
+        f"Город: {data.get('city').replace('Петербург', 'Санкт-Петербург')}\n"
         f"Тип квартиры: {data.get('flat_type')}\n"
         f"Первый взнос: {data.get('first_payment')}"
         + (f"\nТелефон: {data.get('phone')}" if data.get('phone') else "")
@@ -222,24 +262,28 @@ async def handle_free_text(message: types.Message):
     user = message.from_user
     if user.id not in user_states or user_states[user.id].get("step") != 201:
         return
+    if message.text == "← Назад":
+        await handle_back(message)
+        return
     user_states[user.id]["data"]["request_text"] = message.text
     user_states[user.id]["step"] = None
     thank_text = (
         f"*{user.first_name}*, спасибо!\n\n"
         "Передаю информацию менеджеру, чтобы Вы могли обсудить подробности!\n\n"
-        "Наш график работы:\n\nЕжедневно с 09 до 21ч по московскому времени"
+        "Наш график работы: Ежедневно с 9:00 до 19:00"
     )
     await message.answer(thank_text, reply_markup=main_menu_keyboard, parse_mode="Markdown")
     # Отправка данных менеджеру
-    manager_id = 6413686861
+    manager_ids = [6413686861, 762315344, 125301274]
     data = user_states[user.id]["data"]
     username = user.username or "-"
     info = (
         f"Пользователь: {user.first_name} (@{username}) ({user.id})\n"
         f"Цель: {data.get('purpose')}\n"
-        f"Запрос: {data.get('request_text')}"
+        f"Запрос: {data.get('request_text').replace('Петербург', 'Санкт-Петербург')}"
     )
-    await bot.send_message(manager_id, info)
+    for manager_id in manager_ids:
+        await bot.send_message(manager_id, info)
 
 async def cmd_start(message: types.Message):
     await send_welcome(message)
@@ -274,7 +318,7 @@ async def process_city(message: types.Message):
     if purpose == "Купить квартиру для себя":
         await handle_city(message)
     elif purpose == "Купить для инвестиции":
-        await handle_city_inвест(message)
+        await handle_city_invest(message)
 
 async def process_flat_type(message: types.Message):
     user = message.from_user
@@ -306,8 +350,35 @@ async def echo_all(message: types.Message):
     step = user_states[user.id].get("step")
     if step == 201:
         await handle_free_text(message)
+    elif message.text == "← Назад":
+        await handle_back(message)
     else:
         await message.answer("Не совсем понял вас. Можете переформулировать?")
+
+# Обработка кнопки "Назад"
+async def handle_back(message: types.Message):
+    user = message.from_user
+    step = user_states.get(user.id, {}).get("step")
+    purpose = user_states.get(user.id, {}).get("data", {}).get("purpose")
+    # Для обоих сценариев: "Купить квартиру для себя" и "Купить для инвестиции"
+    if step == 1 or step == 101:
+        user_states[user.id]["step"] = None
+        await send_welcome(message)
+    elif step == 2 or step == 102:
+        user_states[user.id]["step"] = 1 if purpose == "Купить квартиру для себя" else 101
+        await message.answer("Когда вы планируете покупку?", reply_markup=buy_time_keyboard)
+    elif step == 3 or step == 103:
+        user_states[user.id]["step"] = 2 if purpose == "Купить квартиру для себя" else 102
+        await message.answer("В каком городе вы ищете недвижимость?", reply_markup=city_keyboard)
+    elif step == 4 or step == 104:
+        user_states[user.id]["step"] = 3 if purpose == "Купить квартиру для себя" else 103
+        await message.answer("Какую квартиру Вы планируете покупать?", reply_markup=flat_type_keyboard)
+    elif step == 5 or step == 105:
+        user_states[user.id]["step"] = 4 if purpose == "Купить квартиру для себя" else 104
+        await message.answer("Какой первый взнос планируете вносить?", reply_markup=first_payment_keyboard)
+    elif step == 201:
+        user_states[user.id]["step"] = None
+        await send_welcome(message)
 
 # В самом низу файла добавим запуск polling
 async def main():
@@ -320,11 +391,12 @@ async def main():
     router.message.register(sell_flat, F.text == "Продать квартиру")
     router.message.register(approve_mortgage, F.text == "Одобрить ипотеку")
     router.message.register(process_buy_time, F.text.in_(["В ближайшие 2 месяца", "В течение полугода", "Только присматриваю"]))
-    router.message.register(process_city, F.text.in_(["Казань", "Москва", "Петербург", "Сочи"]))
-    router.message.register(process_flat_type, F.text.in_(["Студия", "1-комнатная", "2-комнатная", "3-комнатная", "4-комнтаная", "5-комнатная", "Не определился"]))
+    router.message.register(process_city, F.text.in_(["Казань", "Москва", "Санкт-Петербург", "Сочи", "Крым"]))
+    router.message.register(process_flat_type, F.text.in_(["Студия", "1-комнатная", "2-комнатная", "3-комнатная", "4-комнатная", "5-комнатная", "Не определился"]))
     router.message.register(process_first_payment, F.text.in_(["500 тыс - 1 млн", "1 млн - 3 млн", "Свыше 3 млн"]))
     router.message.register(echo_all)
     router.message.register(handle_phone, F.contact | (F.text.regexp(r"^\\+\\d{10,15}$")))
+    router.message.register(handle_back, F.text == "← Назад")
     dp.include_router(router)
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
